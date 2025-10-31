@@ -1,0 +1,65 @@
+# Laravel & Composer
+/vendor/
+composer.lock
+
+# Environment files
+.env
+.env.backup
+.env.local
+.env.testing
+.env.production
+
+# Laravel specific directories
+/storage/*.key
+/storage/app/public
+/storage/debugbar
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+/bootstrap/cache/*.php
+
+# Node & frontend assets
+/node_modules/
+/npm-debug.log
+/yarn-error.log
+/.pnp
+.pnp.js
+
+# IDE & system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.bak
+*.tmp
+*.log
+
+# PHPUnit
+.phpunit.result.cache
+
+# Laravel Mix / Vite
+/public/hot
+/public/storage
+/public/mix-manifest.json
+/public/build
+
+# Coverage reports
+/coverage/
+
+# Temporary files
+*.pid
+*.seed
+*.old
+*.orig
+*.rej
+
+# Jetstream / Breeze specific
+/.vite/deps
+/.vite/deps_temp
+
+# Cache files
+.php-cs-fixer.cache
+/.php-cs-fixer.cache
