@@ -40,6 +40,7 @@ class TransactionController extends Controller
 
     public function store(Request $request)
     {
+        // Validasi dasar (non-detail)
         $request->validate([
             'user_id' => 'required|exists:users,id',
             'customer_id' => 'required|exists:customers,id',
@@ -49,25 +50,46 @@ class TransactionController extends Controller
             'laundry_status' => 'nullable|in:pending,in_queue,in_process,ready,delivered',
             'payment_method' => 'nullable|string|max:255',
             'notes' => 'nullable|string',
-            
-            // Details (array of services)
             'details' => 'required|array|min:1',
-            'details.*.service_id' => 'required|exists:services,id',
-            'details.*.add_on_id' => 'nullable|exists:add_ons,id',
             'details.*.quantity' => 'required|integer|min:1',
             'details.*.weight' => 'nullable|integer|min:0',
             'details.*.unit_price' => 'required|numeric|min:0',
         ]);
 
+        // Validasi manual untuk service_id & add_on_id, minimal salah satu harus ada & valid
+        foreach ($request->details as $i => $detail) {
+            if (empty($detail['service_id']) && empty($detail['add_on_id'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Baris detail ke-" . ($i+1) . " wajib isi service_id atau add_on_id.",
+                    'errors' => ["details.$i" => ["service_id atau add_on_id wajib diisi"]]
+                ], 422);
+            }
+            if (!empty($detail['service_id']) && !\App\Models\Service::where('id', $detail['service_id'])->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "service_id pada baris ke-" . ($i+1) . " tidak valid.",
+                    'errors' => ["details.$i.service_id" => ["service_id tidak ditemukan"]]
+                ], 422);
+            }
+            if (!empty($detail['add_on_id']) && !\App\Models\AddOn::where('id', $detail['add_on_id'])->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "add_on_id pada baris ke-" . ($i+1) . " tidak valid.",
+                    'errors' => ["details.$i.add_on_id" => ["add_on_id tidak ditemukan"]]
+                ], 422);
+            }
+        }
+
         DB::beginTransaction();
         try {
-            // Hitung total dari details
+            // Hitung total transaksi
             $total = 0;
             foreach ($request->details as $detail) {
                 $total += $detail['unit_price'] * $detail['quantity'];
             }
 
-            // Buat transaction
+            // Create Transaction
             $transaction = Transaction::create([
                 'user_id' => $request->user_id,
                 'customer_id' => $request->customer_id,
@@ -81,14 +103,13 @@ class TransactionController extends Controller
                 'notes' => $request->notes,
             ]);
 
-            // Buat transaction details
+            // Create TransactionDetail
             foreach ($request->details as $detail) {
                 $lineTotal = $detail['unit_price'] * $detail['quantity'];
-                
                 TransactionDetail::create([
                     'transaction_id' => $transaction->id,
                     'customer_id' => $request->customer_id,
-                    'service_id' => $detail['service_id'],
+                    'service_id' => $detail['service_id'] ?? null,
                     'add_on_id' => $detail['add_on_id'] ?? null,
                     'quantity' => $detail['quantity'],
                     'weight' => $detail['weight'] ?? null,
@@ -99,7 +120,6 @@ class TransactionController extends Controller
 
             DB::commit();
 
-            // Load relasi untuk response
             $transaction->load(['customer', 'details.service', 'details.addOn']);
 
             return response()->json([
@@ -117,6 +137,7 @@ class TransactionController extends Controller
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
+
 
     public function show(Transaction $transaction)
     {
