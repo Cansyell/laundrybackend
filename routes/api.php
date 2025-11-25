@@ -6,6 +6,8 @@ use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\AddOnController;
+use App\Http\Controllers\ExpenseCategoryController;
+use App\Http\Controllers\ExpenseController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
@@ -25,5 +27,16 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Additional endpoint for statistics
     Route::get('/add-ons-statistics', [AddOnController::class, 'statistics']);
+
+    Route::apiResource('expense-categories', ExpenseCategoryController::class);
+
+    // Expense Routes
+    Route::apiResource('expenses', ExpenseController::class);
+
+    // Additional Expense Routes
+    Route::prefix('expenses')->group(function () {
+        Route::get('summary', [ExpenseController::class, 'summary']);
+        Route::get('by-month', [ExpenseController::class, 'byMonth']);
+    });
     
 });
