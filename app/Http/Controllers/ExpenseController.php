@@ -6,21 +6,43 @@ use App\Models\Expense;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Auth;
 
 class ExpenseController extends Controller
 {
+    /**
+     * Helper function to format expense data with proper types
+     */
+    private function formatExpense($expense)
+    {
+        return [
+            'id' => (int) $expense->id,
+            'user_id' => (int) $expense->user_id,
+            'expenses_category_id' => $expense->expenses_category_id ? (int) $expense->expenses_category_id : null,
+            'amount' => (float) $expense->amount,
+            'payment_method' => $expense->payment_method,
+            'description' => $expense->description,
+            'date' => $expense->date->format('Y-m-d'),
+            'ref_no' => $expense->ref_no,
+            'created_at' => $expense->created_at?->toIso8601String(),
+            'updated_at' => $expense->updated_at?->toIso8601String(),
+            'deleted_at' => $expense->deleted_at?->toIso8601String(),
+            'user' => $expense->user ? [
+                'id' => (int) $expense->user->id,
+                'name' => $expense->user->name,
+            ] : null,
+            'category' => $expense->category ? [
+                'id' => (int) $expense->category->id,
+                'name' => $expense->category->name,
+            ] : null,
+        ];
+    }
+
     /**
      * Display a listing of the resource.
      */
     public function index(Request $request): JsonResponse
     {
         $query = Expense::with(['user:id,name', 'category:id,name']);
-
-        // Filter by user (optional, jika ingin user hanya lihat expense nya sendiri)
-        if ($request->has('user_id')) {
-            $query->byUser($request->user_id);
-        }
 
         // Filter by category
         if ($request->has('category_id')) {
@@ -55,10 +77,15 @@ class ExpenseController extends Controller
         $perPage = $request->get('per_page', 15);
         $expenses = $query->paginate($perPage);
 
+        // ✅ Format with proper type casting
+        $formattedData = $expenses->map(function($expense) {
+            return $this->formatExpense($expense);
+        });
+
         return response()->json([
             'success' => true,
             'message' => 'Expenses retrieved successfully',
-            'data' => $expenses
+            'data' => $formattedData->values()->all()
         ], 200);
     }
 
@@ -91,7 +118,7 @@ class ExpenseController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Expense created successfully',
-            'data' => $expense
+            'data' => $this->formatExpense($expense)
         ], 201);
     }
 
@@ -105,7 +132,7 @@ class ExpenseController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Expense retrieved successfully',
-            'data' => $expense
+            'data' => $this->formatExpense($expense)
         ], 200);
     }
 
@@ -138,7 +165,7 @@ class ExpenseController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Expense updated successfully',
-            'data' => $expense
+            'data' => $this->formatExpense($expense)
         ], 200);
     }
 
@@ -163,28 +190,77 @@ class ExpenseController extends Controller
     {
         $query = Expense::query();
 
-        // Filter by user
-        if ($request->has('user_id')) {
-            $query->byUser($request->user_id);
-        }
-
-        // Filter by date range
+        // Filter by date range (optional)
         if ($request->has('start_date') && $request->has('end_date')) {
             $query->dateRange($request->start_date, $request->end_date);
         }
 
+        // Filter by category (optional)
+        if ($request->has('category_id')) {
+            $query->byCategory($request->category_id);
+        }
+
+        // Total keseluruhan expense dari semua user
         $summary = [
             'total_expenses' => $query->count(),
-            'total_amount' => $query->sum('amount'),
-            'average_amount' => $query->avg('amount'),
+            'total_amount' => (float) $query->sum('amount'),
+            'average_amount' => (float) $query->avg('amount'),
+            
+            // Group by category
             'by_category' => Expense::with('category:id,name')
                 ->selectRaw('expenses_category_id, COUNT(*) as count, SUM(amount) as total')
+                ->when($request->has('start_date') && $request->has('end_date'), function($q) use ($request) {
+                    return $q->dateRange($request->start_date, $request->end_date);
+                })
                 ->groupBy('expenses_category_id')
-                ->get(),
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'expenses_category_id' => $item->expenses_category_id ? (int) $item->expenses_category_id : null,
+                        'count' => (int) $item->count,
+                        'total' => (float) $item->total,
+                        'category' => $item->category ? [
+                            'id' => (int) $item->category->id,
+                            'name' => $item->category->name,
+                        ] : null,
+                    ];
+                }),
+            
+            // Group by payment method
             'by_payment_method' => Expense::selectRaw('payment_method, COUNT(*) as count, SUM(amount) as total')
                 ->whereNotNull('payment_method')
+                ->when($request->has('start_date') && $request->has('end_date'), function($q) use ($request) {
+                    return $q->dateRange($request->start_date, $request->end_date);
+                })
                 ->groupBy('payment_method')
-                ->get(),
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'payment_method' => $item->payment_method,
+                        'count' => (int) $item->count,
+                        'total' => (float) $item->total,
+                    ];
+                }),
+            
+            // Group by user
+            'by_user' => Expense::with('user:id,name')
+                ->selectRaw('user_id, COUNT(*) as count, SUM(amount) as total')
+                ->when($request->has('start_date') && $request->has('end_date'), function($q) use ($request) {
+                    return $q->dateRange($request->start_date, $request->end_date);
+                })
+                ->groupBy('user_id')
+                ->get()
+                ->map(function($item) {
+                    return [
+                        'user_id' => (int) $item->user_id,
+                        'count' => (int) $item->count,
+                        'total' => (float) $item->total,
+                        'user' => $item->user ? [
+                            'id' => (int) $item->user->id,
+                            'name' => $item->user->name,
+                        ] : null,
+                    ];
+                }),
         ];
 
         return response()->json([
@@ -200,25 +276,43 @@ class ExpenseController extends Controller
     public function byMonth(Request $request): JsonResponse
     {
         $year = $request->get('year', date('Y'));
-        $userId = $request->get('user_id');
 
         $query = Expense::selectRaw('MONTH(date) as month, SUM(amount) as total, COUNT(*) as count')
             ->whereYear('date', $year);
 
-        if ($userId) {
-            $query->byUser($userId);
+        // Optional: Filter by category
+        if ($request->has('category_id')) {
+            $query->byCategory($request->category_id);
         }
 
         $expenses = $query->groupBy('month')
             ->orderBy('month')
             ->get();
 
+        // Format response dengan data lengkap untuk semua 12 bulan
+        $monthlyData = [];
+        for ($month = 1; $month <= 12; $month++) {
+            $found = $expenses->firstWhere('month', $month);
+            $monthlyData[] = [
+                'month' => $month,
+                'month_name' => date('F', mktime(0, 0, 0, $month, 1)),
+                'total' => $found ? (float) $found->total : 0.0,
+                'count' => $found ? (int) $found->count : 0,
+            ];
+        }
+
+        // Hitung total tahunan
+        $yearlyTotal = (float) $expenses->sum('total');
+        $yearlyCount = (int) $expenses->sum('count');
+
         return response()->json([
             'success' => true,
             'message' => 'Monthly expenses retrieved successfully',
             'data' => [
-                'year' => $year,
-                'expenses' => $expenses
+                'year' => (int) $year,
+                'yearly_total' => $yearlyTotal,
+                'yearly_count' => $yearlyCount,
+                'monthly_expenses' => $monthlyData,
             ]
         ], 200);
     }

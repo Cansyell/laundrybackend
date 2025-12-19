@@ -22,6 +22,13 @@ class TransactionDetail extends Model
     ];
 
     protected $casts = [
+        'id' => 'integer',
+        'transaction_id' => 'integer',
+        'customer_id' => 'integer',
+        'service_id' => 'integer',
+        'add_on_id' => 'integer',
+        'quantity' => 'integer',
+        'weight' => 'integer',
         'unit_price' => 'decimal:2',
         'line_total' => 'decimal:2',
     ];

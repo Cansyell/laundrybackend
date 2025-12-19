@@ -8,6 +8,7 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\AddOnController;
 use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\PegawaiController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
@@ -38,5 +39,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('summary', [ExpenseController::class, 'summary']);
         Route::get('by-month', [ExpenseController::class, 'byMonth']);
     });
-    
+
+    Route::prefix('pegawai')->group(function () {
+    Route::get('/', [PegawaiController::class, 'index']);
+    Route::post('/', [PegawaiController::class, 'store']);
+    Route::get('/{id}', [PegawaiController::class, 'show']);
+    Route::put('/{id}', [PegawaiController::class, 'update']);
+    Route::delete('/{id}', [PegawaiController::class, 'destroy']);
+    });
 });

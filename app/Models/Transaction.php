@@ -25,6 +25,10 @@ class Transaction extends Model
     ];
 
     protected $casts = [
+        'id' => 'integer',
+        'user_id' => 'integer',
+        'customer_id' => 'integer',
+        'service_id' => 'integer', // meski nullable, tetap cast agar null tetap null & int tetap int
         'total' => 'decimal:2',
         'paid_amount' => 'decimal:2',
         'transaction_date' => 'date',
